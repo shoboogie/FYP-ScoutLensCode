@@ -1,9 +1,11 @@
-"""Similarity search and explanation endpoints."""
+"""Similarity search and explanation endpoints.
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+Uses the in-memory FAISS index and metadata cache — no database needed.
+"""
 
-from app.database import get_db
+from fastapi import APIRouter, HTTPException, Query
+import numpy as np
+
 from app.schemas.explain import ExplanationResponse, FeatureContribution
 from app.schemas.similarity import (
     SimilarityRequest,
@@ -16,47 +18,31 @@ from app.services.explain_service import explain_similarity
 router = APIRouter(tags=["similarity"])
 
 
-def _build_metadata_cache(db_results) -> dict[int, dict]:
-    """Build an in-memory lookup for post-filtering in the FAISS layer.
+def _get_cache() -> dict[int, dict]:
+    from app.main import player_metadata_cache
+    return player_metadata_cache
 
-    In a production system this would be pre-cached. For the dissertation
-    scope we load from the feature matrix parquet on startup.
-    """
-    # Loaded at app startup and cached — see main.py
-    from app.services.similarity_service import _player_ids
-    return {}
+
+def _find_by_season_id(cache: dict[int, dict], ps_id: int) -> dict | None:
+    for m in cache.values():
+        if m["player_season_id"] == ps_id:
+            return m
+    return None
 
 
 @router.post("/similar/{player_season_id}", response_model=SimilarityResponse)
-async def find_similar(
-    player_season_id: int,
-    body: SimilarityRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    # Look up the player_id from player_season_id
-    from app.models.player import PlayerSeason
-    from sqlalchemy import select
-    from sqlalchemy.orm import joinedload
-
-    stmt = (
-        select(PlayerSeason)
-        .where(PlayerSeason.id == player_season_id)
-        .options(joinedload(PlayerSeason.player), joinedload(PlayerSeason.team))
-    )
-    result = await db.execute(stmt)
-    ps = result.scalar_one_or_none()
-    if not ps:
+async def find_similar(player_season_id: int, body: SimilarityRequest):
+    cache = _get_cache()
+    meta = _find_by_season_id(cache, player_season_id)
+    if not meta:
         raise HTTPException(status_code=404, detail="Player season not found")
 
-    # Load metadata cache for post-filtering
-    from app.main import player_metadata_cache
-
     matches = search_similar(
-        player_id=ps.player_id,
+        player_id=meta["player_id"],
         k=body.k,
         role_filter=body.role_filter,
         feature_weights=body.feature_weights,
-        player_metadata=player_metadata_cache,
+        player_metadata=cache,
         league_filter=body.league_filter,
         age_min=body.age_min,
         age_max=body.age_max,
@@ -70,7 +56,7 @@ async def find_similar(
             player_name=m.get("player_name", ""),
             team_name=m.get("team_name", ""),
             league=m.get("league", ""),
-            age=m.get("age", 0),
+            age=m.get("age", 25),
             minutes_played=m.get("minutes_played", 0),
             role_label=m.get("role_label"),
             similarity_score=m["similarity_score"],
@@ -79,9 +65,9 @@ async def find_similar(
     ]
 
     return SimilarityResponse(
-        query_player_id=ps.player_id,
-        query_player_name=ps.player.player_name,
-        query_role=ps.role_label,
+        query_player_id=meta["player_id"],
+        query_player_name=meta["player_name"],
+        query_role=meta.get("role_label"),
         results=results,
         total=len(results),
     )
@@ -91,29 +77,32 @@ async def find_similar(
 async def explain(
     player_season_id: int,
     target_id: int = Query(..., description="Target player_season_id to compare against"),
-    db: AsyncSession = Depends(get_db),
 ):
     """Per-feature cosine decomposition between two players."""
-    from app.models.player import PlayerVector
-    from sqlalchemy import select
-    import numpy as np
+    from app.services.similarity_service import _index, _player_ids
 
-    # Load both vectors
-    stmt_q = select(PlayerVector).where(PlayerVector.player_season_id == player_season_id)
-    stmt_t = select(PlayerVector).where(PlayerVector.player_season_id == target_id)
+    if _index is None or _player_ids is None:
+        raise HTTPException(status_code=503, detail="Index not loaded")
 
-    q_result = await db.execute(stmt_q)
-    t_result = await db.execute(stmt_t)
+    cache = _get_cache()
+    query_meta = _find_by_season_id(cache, player_season_id)
+    target_meta = _find_by_season_id(cache, target_id)
 
-    q_vec = q_result.scalar_one_or_none()
-    t_vec = t_result.scalar_one_or_none()
+    if not query_meta or not target_meta:
+        raise HTTPException(status_code=404, detail="Player not found")
 
-    if not q_vec or not t_vec:
-        raise HTTPException(status_code=404, detail="Vector not found for one or both players")
+    # Reconstruct vectors from FAISS index
+    q_idx = int(np.where(_player_ids == query_meta["player_id"])[0][0])
+    t_idx = int(np.where(_player_ids == target_meta["player_id"])[0][0])
+
+    q_vec = np.zeros(_index.d, dtype=np.float32)
+    t_vec = np.zeros(_index.d, dtype=np.float32)
+    _index.reconstruct(q_idx, q_vec)
+    _index.reconstruct(t_idx, t_vec)
 
     explanation = explain_similarity(
-        np.array(q_vec.vector, dtype=np.float64),
-        np.array(t_vec.vector, dtype=np.float64),
+        q_vec.astype(np.float64),
+        t_vec.astype(np.float64),
     )
 
     return ExplanationResponse(

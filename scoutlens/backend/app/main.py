@@ -35,19 +35,24 @@ def _load_metadata_cache() -> None:
 
     for i, (_, row) in enumerate(df.iterrows(), start=1):
         pid = int(row["player_id"])
-        player_metadata_cache[pid] = {
+        entry = {
             "player_id": pid,
-            "player_season_id": i,  # sequential until DB seeding assigns real IDs
+            "player_season_id": i,
             "player_name": row.get("player_name", ""),
             "team_name": row.get("team_name", ""),
             "league": row.get("league", ""),
             "primary_position": row.get("primary_position"),
             "role_label": row.get("role_label"),
-            "role_confidence": row.get("role_confidence"),
+            "role_confidence": float(row["role_confidence"]) if pd.notna(row.get("role_confidence")) else None,
             "minutes_played": int(row.get("total_minutes", 0)),
             "matches_played": int(row.get("matches_played", 0)),
-            "age": int(row.get("age", 0)) if pd.notna(row.get("age")) else 0,
+            "age": int(row.get("age", 0)) if pd.notna(row.get("age")) else 25,
+            "season": "2015/2016",
         }
+        # Store per-90 features for profile lookups without DB
+        for fn in FEATURE_NAMES:
+            entry[fn] = float(row[fn]) if fn in row and pd.notna(row[fn]) else 0.0
+        player_metadata_cache[pid] = entry
 
     logger.info("Metadata cache loaded: %d players", len(player_metadata_cache))
 

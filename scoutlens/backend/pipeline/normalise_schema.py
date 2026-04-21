@@ -153,8 +153,8 @@ def normalise(force: bool = False) -> Path:
     events = pd.concat(frames, ignore_index=True)
     logger.info("Combined events: %d rows, %d columns", len(events), len(events.columns))
 
-    # Rename columns to match CLAUDE.md spec (sb.competition_events uses
-    # shorter names than the per-match sb.events() function)
+    # sb.competition_events() uses shorter column names than per-match
+    # sb.events() — rename to the standard underscore-separated format
     _RENAME_MAP = {
         "type": "type_name",
         "player": "player_name",

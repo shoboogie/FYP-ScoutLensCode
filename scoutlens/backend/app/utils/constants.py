@@ -2,9 +2,6 @@
 
 This ordering MUST match the FAISS index. Any change requires a full
 pipeline re-run (ingest -> features -> index -> seed).
-
-Role definitions sourced from SCOUTLENS_ROLES.md (authoritative for all
-role-related constants; supersedes CLAUDE.md where they conflict).
 """
 
 # ── Feature Vector Definition ─────────────────────────────────────────
@@ -488,7 +485,7 @@ SCOUTING_DESCRIPTORS: dict[str, dict[str, list[str]]] = {
 }
 
 
-# ── StatsBomb Competition IDs (CLAUDE.md) ─────────────────────────────
+# ── StatsBomb Competition IDs ─────────────────────────────────────────
 
 BIG_FIVE_COMPETITIONS: list[dict] = [
     {"competition_id": 2,  "season_id": 27, "name": "Premier League"},
@@ -499,7 +496,7 @@ BIG_FIVE_COMPETITIONS: list[dict] = [
 ]
 
 
-# ── Quality Filtering Thresholds (CLAUDE.md) ──────────────────────────
+# ── Quality Filtering Thresholds ──────────────────────────────────────
 
 MIN_MINUTES: int = 900
 MIN_AGE: int = 18
