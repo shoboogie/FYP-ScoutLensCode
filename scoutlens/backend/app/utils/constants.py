@@ -95,7 +95,8 @@ POSITION_GROUPS: dict[str, dict] = {
     "Attacking Midfield": {
         "positions": [
             "Left Center Attacking Midfield", "Center Attacking Midfield",
-            "Right Center Attacking Midfield",
+            "Right Center Attacking Midfield", "Left Attacking Midfield",
+            "Right Attacking Midfield",
         ],
         "roles": ["Advanced Playmaker"],
     },
