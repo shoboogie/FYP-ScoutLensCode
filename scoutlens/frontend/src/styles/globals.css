@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-100 text-gray-900;
+  }
+}
+
+@layer components {
+  /* Percentile bar colour coding — red < 25, orange < 50, green < 75, dark green >= 75 */
+  .percentile-bar-red {
+    @apply bg-red-500;
+  }
+  .percentile-bar-orange {
+    @apply bg-orange-400;
+  }
+  .percentile-bar-green {
+    @apply bg-emerald-500;
+  }
+  .percentile-bar-elite {
+    @apply bg-emerald-700;
+  }
+}
