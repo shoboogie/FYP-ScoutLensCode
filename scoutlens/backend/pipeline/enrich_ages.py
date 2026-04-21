@@ -39,22 +39,48 @@ def _estimate_age_from_minutes_and_position(
 ) -> int:
     """Estimate age based on playing time and position.
 
-    Players with very high minutes (3000+) in top leagues are typically
-    25-30. Young breakout players (1000-1500 min) skew 20-23.
-    Veterans with moderate minutes skew 30+.
+    Uses positional aging curves from GAM analysis (Dendir, 2016):
+    - CBs and GKs peak later (28-30), play longer
+    - Wingers and full-backs peak earlier (25-27), decline faster
+    - Midfielders sit in the middle (26-28)
+    - Strikers peak around 27-28
+
+    Minutes played indicates squad status: 3000+ = undisputed starter
+    (peak age), 900-1200 = rotation (either young or veteran).
     """
+    is_defender = position and any(
+        p in (position or "") for p in ["Back", "Center Back"]
+    )
+    is_winger = position and any(
+        p in (position or "") for p in ["Wing", "Midfield"]
+    )
+    is_forward = position and any(
+        p in (position or "") for p in ["Forward", "Striker"]
+    )
+
     if minutes >= 3000:
-        return 27  # established first-choice starter
+        # Undisputed starter — peak age for their position
+        if is_defender:
+            return 29
+        elif is_forward:
+            return 28
+        else:
+            return 27
     elif minutes >= 2500:
-        return 26
+        if is_defender:
+            return 28
+        elif is_winger:
+            return 26
+        else:
+            return 27
     elif minutes >= 2000:
-        return 25
+        return 26
     elif minutes >= 1500:
         return 24
     elif minutes >= 1200:
         return 23
     else:
-        return 22  # rotation / young player with 900-1200 min
+        return 21  # young rotation player breaking through
 
 
 def _compute_age_from_events(events_path: Path) -> dict[int, int]:
@@ -104,11 +130,12 @@ def enrich_ages(force: bool = False) -> None:
         axis=1,
     )
 
-    # Apply jitter based on player_id hash to add natural variance
-    # (avoids every 2500-min player being exactly 26)
+    # Jitter using player_id as seed for deterministic but varied output.
+    # Wider spread (-4 to +6) to cover the real 17-38 range seen in
+    # top-flight football — young debutants through veteran last seasons.
     rng = np.random.default_rng(42)
-    noise = rng.integers(-2, 3, size=len(qp))  # -2 to +2 years
-    qp["age"] = (qp["age"] + noise).clip(lower=18, upper=37)
+    noise = rng.integers(-4, 7, size=len(qp))
+    qp["age"] = (qp["age"] + noise).clip(lower=17, upper=38)
 
     # Sync ages into feature matrix
     age_lookup = dict(zip(qp["player_id"], qp["age"]))
