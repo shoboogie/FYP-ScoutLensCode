@@ -23,7 +23,6 @@ export default function PlayerCard({ player }: Props) {
       </div>
 
       <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-600">
-        <span>Age {player.age}</span>
         <span>{player.minutes_played} min</span>
         <span>{player.matches_played} matches</span>
         {player.primary_position && (

@@ -51,7 +51,6 @@ export default function PlayerProfilePage() {
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-gray-600">
-          <span>Age {profile.age}</span>
           <span>{profile.minutes_played} minutes</span>
           <span>{profile.matches_played} matches</span>
           {profile.primary_position && (

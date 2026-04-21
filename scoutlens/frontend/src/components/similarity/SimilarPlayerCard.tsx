@@ -31,7 +31,6 @@ export default function SimilarPlayerCard({ player }: Props) {
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-600">
-        <span>Age {player.age}</span>
         <span>{player.minutes_played} min</span>
         {player.role_label && <PlayerBadge role={player.role_label} />}
       </div>
