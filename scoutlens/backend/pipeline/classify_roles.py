@@ -51,132 +51,65 @@ _GROUP_TO_ROLES: dict[str, list[str]] = {
 }
 
 
-def _label_cluster(
-    cluster_members: pd.DataFrame,
-    centroid_z: np.ndarray,
-    feature_names: list[str],
-) -> str:
-    """Assign a role label to a cluster based on its centroid profile.
+def _score_role(role: str, z: np.ndarray, fi: dict[str, int]) -> float:
+    """Score how well a player's z-profile matches a given role archetype."""
+    if role == "Ball-Playing CB":
+        return (z[fi["progressive_passes_per90"]] + z[fi["passes_under_pressure_pct"]]
+                + z[fi["progressive_carries_per90"]] - z[fi["clearances_per90"]] * 0.5)
 
-    Uses the position distribution of cluster members and the centroid's
-    z-score signature to find the best matching role label.
-    """
-    # Determine the dominant position group in this cluster
-    positions = cluster_members["primary_position"].dropna()
-    group_counts: dict[str, int] = {}
-    for pos in positions:
-        group = _POSITION_TO_GROUP.get(pos, "Unknown")
-        group_counts[group] = group_counts.get(group, 0) + 1
+    elif role == "Aerial/Stopper CB":
+        return (z[fi["aerial_win_pct"]] + z[fi["interceptions_per90"]]
+                + z[fi["blocks_per90"]] + z[fi["clearances_per90"]])
 
-    if not group_counts:
-        return "Unknown"
+    elif role == "Attacking Full-Back":
+        return (z[fi["crosses_per90"]] + z[fi["key_passes_per90"]]
+                + z[fi["progressive_carries_per90"]] + z[fi["carries_into_box_per90"]])
 
-    dominant_group = max(group_counts, key=group_counts.get)
-    candidate_roles = _GROUP_TO_ROLES.get(dominant_group, [])
+    elif role == "Inverted Full-Back":
+        return (z[fi["passes_attempted_per90"]] + z[fi["pass_completion_pct"]]
+                + z[fi["progressive_passes_per90"]] - z[fi["crosses_per90"]])
 
-    if not candidate_roles:
-        return dominant_group
+    elif role == "Deep-Lying Playmaker":
+        return (z[fi["progressive_pass_distance_per90"]] + z[fi["passes_attempted_per90"]]
+                + z[fi["switches_per90"]] + z[fi["long_pass_completion_pct"]])
 
-    if len(candidate_roles) == 1:
-        return candidate_roles[0]
+    elif role == "Ball-Winning Midfielder":
+        return (z[fi["tackles_per90"]] + z[fi["interceptions_per90"]]
+                + z[fi["ball_recoveries_per90"]] + z[fi["pressures_per90"]])
 
-    # Disambiguate within the group using centroid z-scores and
-    # signature stats for each candidate role
-    role_scores: dict[str, float] = {}
+    elif role == "Box-to-Box Midfielder":
+        return (z[fi["progressive_carries_per90"]] + z[fi["touches_in_box_per90"]]
+                + z[fi["pressures_per90"]] + z[fi["ball_recoveries_per90"]])
 
-    # Feature index lookup
-    fi = {name: i for i, name in enumerate(feature_names)}
+    elif role == "Advanced Playmaker":
+        return (z[fi["xa_per90"]] + z[fi["through_balls_per90"]]
+                + z[fi["key_passes_per90"]] + z[fi["passes_into_box_per90"]])
 
-    for role in candidate_roles:
-        score = 0.0
+    elif role == "Inside Forward":
+        return (z[fi["xg_per90"]] + z[fi["shots_per90"]]
+                + z[fi["progressive_carries_per90"]] - z[fi["crosses_per90"]])
 
-        if role == "Ball-Playing CB":
-            score += centroid_z[fi["progressive_passes_per90"]]
-            score += centroid_z[fi["passes_under_pressure_pct"]]
-            score += centroid_z[fi["progressive_carries_per90"]]
-            score -= centroid_z[fi["clearances_per90"]] * 0.5
+    elif role == "Touchline Winger":
+        return (z[fi["crosses_per90"]] + z[fi["dribbles_attempted_per90"]]
+                + z[fi["progressive_carries_per90"]] - z[fi["shots_per90"]] * 0.5)
 
-        elif role == "Aerial/Stopper CB":
-            score += centroid_z[fi["aerial_win_pct"]]
-            score += centroid_z[fi["interceptions_per90"]]
-            score += centroid_z[fi["blocks_per90"]]
-            score += centroid_z[fi["clearances_per90"]]
+    elif role == "Complete Forward":
+        return (z[fi["xg_per90"]] + z[fi["key_passes_per90"]]
+                + z[fi["ball_receipts_per90"]] + z[fi["aerial_win_pct"]])
 
-        elif role == "Attacking Full-Back":
-            score += centroid_z[fi["crosses_per90"]]
-            score += centroid_z[fi["key_passes_per90"]]
-            score += centroid_z[fi["progressive_carries_per90"]]
-            score += centroid_z[fi["carries_into_box_per90"]]
+    elif role == "Poacher":
+        return (z[fi["goals_per90"]] + z[fi["xg_per_shot"]]
+                + z[fi["touches_in_box_per90"]] - z[fi["progressive_passes_per90"]])
 
-        elif role == "Inverted Full-Back":
-            score += centroid_z[fi["passes_attempted_per90"]]
-            score += centroid_z[fi["pass_completion_pct"]]
-            score += centroid_z[fi["progressive_passes_per90"]]
-            score -= centroid_z[fi["crosses_per90"]]
+    elif role == "Target Forward":
+        return (z[fi["aerial_duels_per90"]] + z[fi["aerial_win_pct"]]
+                + z[fi["fouls_won_per90"]] - z[fi["dribbles_attempted_per90"]])
 
-        elif role == "Deep-Lying Playmaker":
-            score += centroid_z[fi["progressive_pass_distance_per90"]]
-            score += centroid_z[fi["passes_attempted_per90"]]
-            score += centroid_z[fi["switches_per90"]]
-            score += centroid_z[fi["long_pass_completion_pct"]]
+    elif role == "Pressing Forward":
+        return (z[fi["pressures_per90"]] + z[fi["ball_recoveries_per90"]]
+                + z[fi["xa_per90"]] - z[fi["goals_per90"]] * 0.3)
 
-        elif role == "Ball-Winning Midfielder":
-            score += centroid_z[fi["tackles_per90"]]
-            score += centroid_z[fi["interceptions_per90"]]
-            score += centroid_z[fi["ball_recoveries_per90"]]
-            score += centroid_z[fi["pressures_per90"]]
-
-        elif role == "Box-to-Box Midfielder":
-            score += centroid_z[fi["progressive_carries_per90"]]
-            score += centroid_z[fi["touches_in_box_per90"]]
-            score += centroid_z[fi["pressures_per90"]]
-            score += centroid_z[fi["ball_recoveries_per90"]]
-
-        elif role == "Advanced Playmaker":
-            score += centroid_z[fi["xa_per90"]]
-            score += centroid_z[fi["through_balls_per90"]]
-            score += centroid_z[fi["key_passes_per90"]]
-            score += centroid_z[fi["passes_into_box_per90"]]
-
-        elif role == "Inside Forward":
-            score += centroid_z[fi["xg_per90"]]
-            score += centroid_z[fi["shots_per90"]]
-            score += centroid_z[fi["progressive_carries_per90"]]
-            score -= centroid_z[fi["crosses_per90"]]
-
-        elif role == "Touchline Winger":
-            score += centroid_z[fi["crosses_per90"]]
-            score += centroid_z[fi["dribbles_attempted_per90"]]
-            score += centroid_z[fi["progressive_carries_per90"]]
-            score -= centroid_z[fi["shots_per90"]] * 0.5
-
-        elif role == "Complete Forward":
-            score += centroid_z[fi["xg_per90"]]
-            score += centroid_z[fi["key_passes_per90"]]
-            score += centroid_z[fi["ball_receipts_per90"]]
-            score += centroid_z[fi["aerial_win_pct"]]
-
-        elif role == "Poacher":
-            score += centroid_z[fi["goals_per90"]]
-            score += centroid_z[fi["xg_per_shot"]]
-            score += centroid_z[fi["touches_in_box_per90"]]
-            score -= centroid_z[fi["progressive_passes_per90"]]
-
-        elif role == "Target Forward":
-            score += centroid_z[fi["aerial_duels_per90"]]
-            score += centroid_z[fi["aerial_win_pct"]]
-            score += centroid_z[fi["fouls_won_per90"]]
-            score -= centroid_z[fi["dribbles_attempted_per90"]]
-
-        elif role == "Pressing Forward":
-            score += centroid_z[fi["pressures_per90"]]
-            score += centroid_z[fi["ball_recoveries_per90"]]
-            score += centroid_z[fi["xa_per90"]]
-            score -= centroid_z[fi["goals_per90"]] * 0.3
-
-        role_scores[role] = score
-
-    return max(role_scores, key=role_scores.get)
+    return 0.0
 
 
 def classify_roles(force: bool = False) -> Path:
@@ -234,53 +167,47 @@ def classify_roles(force: bool = False) -> Path:
     sil_samples = silhouette_samples(X_scaled, cluster_labels)
     df["role_confidence"] = sil_samples
 
-    # Assign role labels to each cluster
-    cluster_role_map: dict[int, str] = {}
-    used_labels: set[str] = set()
+    # Per-player role assignment — constrained by position group.
+    # Each player is assigned the best-fitting role from their position
+    # group's candidate roles, scored against their individual z-profile.
+    fi = {name: i for i, name in enumerate(FEATURE_NAMES)}
+    role_labels_out: list[str] = []
 
-    for cid in sorted(df["cluster_id"].unique()):
-        cluster_mask = df["cluster_id"] == cid
-        cluster_members = df[cluster_mask]
-        cluster_indices = np.where(cluster_mask)[0]
-        centroid_z = X_scaled[cluster_indices].mean(axis=0)
+    for idx, row in df.iterrows():
+        pos = row.get("primary_position")
+        group = _POSITION_TO_GROUP.get(pos, "Unknown") if pos else "Unknown"
+        candidates = _GROUP_TO_ROLES.get(group, ROLE_LABELS)
 
-        label = _label_cluster(cluster_members, centroid_z, FEATURE_NAMES)
+        if len(candidates) == 1:
+            role_labels_out.append(candidates[0])
+            continue
 
-        # Avoid duplicate labels — append cluster ID if needed
-        if label in used_labels:
-            for alt_label in ROLE_LABELS:
-                if alt_label not in used_labels:
-                    label = alt_label
-                    break
-            else:
-                label = f"{label} ({cid})"
+        player_z = X_scaled[len(role_labels_out)]
+        best_role = candidates[0]
+        best_score = -999.0
 
-        cluster_role_map[cid] = label
-        used_labels.add(label)
+        for role in candidates:
+            score = _score_role(role, player_z, fi)
+            if score > best_score:
+                best_score = score
+                best_role = role
 
-        logger.info(
-            "  Cluster %d → %s (%d players, sil=%.3f)",
-            cid, label, len(cluster_members),
-            sil_samples[cluster_indices].mean(),
-        )
+        role_labels_out.append(best_role)
 
-    df["role_label"] = df["cluster_id"].map(cluster_role_map)
+    df["role_label"] = role_labels_out
 
-    # Log position sanity check per cluster
-    for cid, role in cluster_role_map.items():
-        members = df[df["cluster_id"] == cid]
-        pos_dist = members["primary_position"].apply(
-            lambda p: _POSITION_TO_GROUP.get(p, "Unknown")
-        ).value_counts()
-        logger.info("  %s position breakdown: %s", role, pos_dist.to_dict())
+    # Log role distribution per position group
+    for group_name in _GROUP_TO_ROLES:
+        group_positions = POSITION_GROUPS[group_name]["positions"]
+        group_players = df[df["primary_position"].isin(group_positions)]
+        if len(group_players) > 0:
+            dist = group_players["role_label"].value_counts().to_dict()
+            logger.info("  %s: %s", group_name, dist)
 
-    # Save model artefacts (pickle is used intentionally for sklearn
-    # model serialisation; the file is only generated and loaded locally)
     model = {
         "linkage": Z,
         "scaler_mean": scaler.mean_,
         "scaler_scale": scaler.scale_,
-        "cluster_role_map": cluster_role_map,
         "best_k": best_k,
         "best_silhouette": best_score,
         "feature_names": FEATURE_NAMES,

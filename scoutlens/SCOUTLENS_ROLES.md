@@ -1,24 +1,7 @@
----
-name: scoutlens-role-intelligence
-description: >
-  ScoutLens's authoritative domain intelligence layer for role-aware football player
-  similarity search, scouting language, and tactical classification. Use this skill
-  WHENEVER generating code, API responses, UI components, scouting language, feature
-  engineering, clustering logic, similarity queries, radar charts, player profile pages,
-  shortlist annotations, evaluation scripts, or any output touching player roles,
-  positions, stats, or scouting context within the ScoutLens project. Also trigger when
-  writing dissertation sections about role classification, designing evaluation
-  experiments, generating test/seed data, or explaining similarity results to users.
-  If the task involves a football player in any capacity — trigger this skill. This
-  skill supersedes any role-related constants in CLAUDE.md where they conflict; CLAUDE.md
-  remains authoritative for architecture, tech stack, and repository structure.
----
-
 # ScoutLens Role Intelligence Engine v2.0
 
 > **Single source of truth** for every module that touches player data — from
 > `classify_roles.py` to `RadarChart.tsx` to the dissertation methodology chapter.
-> CLAUDE.md handles architecture and tech stack. This file handles football intelligence.
 
 ---
 
@@ -61,7 +44,7 @@ player card is the information a scout would assess first.
 | Ignoring league context | Per-90 stats inflate/deflate by league tempo and pressing intensity | League badges + league-stratified percentiles in UI |
 | Misprofiling by team style | A player's role doesn't match the team's playing style, making them look worse than they are | Role classification from event data, not from team label |
 | No clear recruitment identity | No specific player type targeted for the vacancy — no vision for how the signing fits the system | Dimension weight sliders let scouts define what matters |
-| Raw totals instead of rates | A 3,400-minute player looks "better" than a 1,200-minute player | All features per-90 normalised (CLAUDE.md §5) |
+| Raw totals instead of rates | A 3,400-minute player looks "better" than a 1,200-minute player | All features per-90 normalised |
 | Single-metric shortcuts | "Most assists" ≠ best creative player | 42-feature vector across 6 balanced dimensions |
 | Shared-zeroes inflation | Both players register zero in irrelevant metrics, which cosine similarity treats as agreement | Role-conditioned dimension weights dampen irrelevant features |
 | Context-stripped metrics | Same action (e.g., aerial duel) means different things in different pitch zones | Role-aware pre-filtering separates offensive from defensive aerial contexts |
@@ -1035,7 +1018,7 @@ Store formation from StatsBomb lineups as contextual badge. Optional filter:
 
 ---
 
-## §13 — Updated Constants (Supersedes CLAUDE.md ROLE_LABELS)
+## §13 — Role Labels (Authoritative)
 
 ```python
 ROLE_LABELS: list[str] = [

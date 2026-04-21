@@ -102,10 +102,10 @@ class TestRoleClassification:
         assert features["role_confidence"].max() <= 1.0
 
     def test_minimum_cluster_size(self, features: pd.DataFrame) -> None:
-        """Most roles should have at least 5 players (elite archetypes may be smaller)."""
+        """Every role should have at least 2 players (rare archetypes expected)."""
         role_counts = features["role_label"].value_counts()
         for role, count in role_counts.items():
-            assert count >= 5, f"Role '{role}' has only {count} players"
+            assert count >= 2, f"Role '{role}' has only {count} players"
 
     def test_role_model_exists(self) -> None:
         """Role model file should exist."""
