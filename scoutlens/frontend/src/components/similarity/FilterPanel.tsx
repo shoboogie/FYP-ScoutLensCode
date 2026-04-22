@@ -2,8 +2,6 @@ import { useState } from "react";
 
 interface Filters {
   league: string;
-  ageMin: string;
-  ageMax: string;
   minMinutes: string;
   roleFilter: boolean;
   k: string;
@@ -19,8 +17,6 @@ const LEAGUES = ["", "Premier League", "La Liga", "Bundesliga", "Serie A", "Ligu
 export default function FilterPanel({ onApply, isLoading }: Props) {
   const [filters, setFilters] = useState<Filters>({
     league: "",
-    ageMin: "",
-    ageMax: "",
     minMinutes: "900",
     roleFilter: true,
     k: "10",
@@ -46,29 +42,6 @@ export default function FilterPanel({ onApply, isLoading }: Props) {
               <option key={l} value={l}>{l || "All leagues"}</option>
             ))}
           </select>
-        </div>
-
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <label className="mb-1 block text-gray-600">Age min</label>
-            <input
-              type="number"
-              value={filters.ageMin}
-              onChange={(e) => update("ageMin", e.target.value)}
-              placeholder="18"
-              className="w-full rounded border border-gray-300 px-2 py-1.5"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="mb-1 block text-gray-600">Age max</label>
-            <input
-              type="number"
-              value={filters.ageMax}
-              onChange={(e) => update("ageMax", e.target.value)}
-              placeholder="40"
-              className="w-full rounded border border-gray-300 px-2 py-1.5"
-            />
-          </div>
         </div>
 
         <div>

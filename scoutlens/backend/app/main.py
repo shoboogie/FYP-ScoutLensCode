@@ -78,7 +78,25 @@ app = FastAPI(
     ),
     version="0.1.0",
     lifespan=lifespan,
+    swagger_ui_parameters={"syntaxHighlight.theme": "monokai"},
 )
+
+
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import HTMLResponse
+
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui():
+    """Swagger UI with British English localisation."""
+    html = get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=app.title + " — Documentation",
+        swagger_ui_parameters={"syntaxHighlight.theme": "monokai"},
+    )
+    # Replace American "Authorize" with British "Authorise"
+    content = html.body.decode().replace("Authorize", "Authorise")
+    return HTMLResponse(content=content)
 
 app.add_middleware(
     CORSMiddleware,

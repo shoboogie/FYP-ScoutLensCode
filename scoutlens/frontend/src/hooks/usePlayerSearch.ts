@@ -6,8 +6,6 @@ interface SearchParams {
   q: string;
   league?: string;
   position?: string;
-  ageMin?: number;
-  ageMax?: number;
   minMinutes?: number;
 }
 
@@ -20,8 +18,6 @@ export function usePlayerSearch(params: SearchParams) {
           q: params.q,
           league: params.league || undefined,
           position: params.position || undefined,
-          age_min: params.ageMin || undefined,
-          age_max: params.ageMax || undefined,
           min_minutes: params.minMinutes || 900,
         },
       });

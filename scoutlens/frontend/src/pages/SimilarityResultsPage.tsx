@@ -24,8 +24,6 @@ export default function SimilarityResultsPage() {
 
   const handleApply = (filters: {
     league: string;
-    ageMin: string;
-    ageMax: string;
     minMinutes: string;
     roleFilter: boolean;
     k: string;
@@ -33,8 +31,6 @@ export default function SimilarityResultsPage() {
     similarity.mutate({
       k: parseInt(filters.k) || 10,
       league_filter: filters.league || null,
-      age_min: filters.ageMin ? parseInt(filters.ageMin) : null,
-      age_max: filters.ageMax ? parseInt(filters.ageMax) : null,
       min_minutes: parseInt(filters.minMinutes) || 900,
       role_filter: filters.roleFilter,
       feature_weights: customWeights,
