@@ -1,10 +1,13 @@
-"""Shortlist CRUD endpoints — requires JWT authentication."""
+"""Shortlist CRUD endpoints — requires JWT authentication.
+
+Uses in-memory storage so shortlists work without PostgreSQL.
+"""
+
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
 from app.schemas.shortlist import (
     ShortlistCreate,
     ShortlistEntry,
@@ -12,79 +15,96 @@ from app.schemas.shortlist import (
     ShortlistUpdate,
 )
 from app.services.auth_service import decode_token
-from app.services.shortlist_service import (
-    add_to_shortlist,
-    get_user_shortlist,
-    remove_from_shortlist,
-    update_shortlist_notes,
-)
 
 router = APIRouter(prefix="/shortlist", tags=["shortlist"])
 security = HTTPBearer()
 
+# In-memory shortlist store: {user_id: [entry_dict, ...]}
+_shortlists: dict[int, list[dict]] = {}
+_next_id = 1
+
 
 def _get_user_id(credentials: HTTPAuthorizationCredentials) -> int:
-    """Extract user_id from JWT, raising 401 on failure."""
     payload = decode_token(credentials.credentials)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return int(payload["sub"])
 
 
+def _get_cache() -> dict[int, dict]:
+    from app.main import player_metadata_cache
+    return player_metadata_cache
+
+
+def _find_player_by_season_id(ps_id: int) -> dict | None:
+    cache = _get_cache()
+    for m in cache.values():
+        if m["player_season_id"] == ps_id:
+            return m
+    return None
+
+
+def _to_entry(e: dict) -> ShortlistEntry:
+    return ShortlistEntry(
+        id=e["id"],
+        player_season_id=e["player_season_id"],
+        player_name=e["player_name"],
+        team_name=e["team_name"],
+        league=e["league"],
+        role_label=e.get("role_label"),
+        notes=e["notes"],
+        created_at=e["created_at"],
+    )
+
+
 @router.get("", response_model=ShortlistResponse)
 async def list_shortlist(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db),
 ):
     user_id = _get_user_id(credentials)
-    entries = await get_user_shortlist(db, user_id)
-
-    items = []
-    for e in entries:
-        ps = e.player_season
-        items.append(ShortlistEntry(
-            id=e.id,
-            player_season_id=e.player_season_id,
-            player_name=ps.player.player_name if ps and ps.player else "",
-            team_name=ps.team.team_name if ps and ps.team else "",
-            league=ps.team.league if ps and ps.team else "",
-            role_label=ps.role_label if ps else None,
-            notes=e.notes,
-            created_at=e.created_at,
-        ))
-
-    return ShortlistResponse(entries=items, total=len(items))
+    entries = _shortlists.get(user_id, [])
+    return ShortlistResponse(
+        entries=[_to_entry(e) for e in entries],
+        total=len(entries),
+    )
 
 
 @router.post("", response_model=ShortlistEntry, status_code=status.HTTP_201_CREATED)
 async def add_shortlist(
     body: ShortlistCreate,
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db),
 ):
+    global _next_id
     user_id = _get_user_id(credentials)
-    try:
-        entry = await add_to_shortlist(db, user_id, body.player_season_id, body.notes)
-    except Exception:
-        raise HTTPException(status_code=409, detail="Already on shortlist")
 
-    # Reload with relationships
-    entries = await get_user_shortlist(db, user_id)
-    for e in entries:
-        if e.id == entry.id:
-            ps = e.player_season
-            return ShortlistEntry(
-                id=e.id,
-                player_season_id=e.player_season_id,
-                player_name=ps.player.player_name if ps and ps.player else "",
-                team_name=ps.team.team_name if ps and ps.team else "",
-                league=ps.team.league if ps and ps.team else "",
-                role_label=ps.role_label if ps else None,
-                notes=e.notes,
-                created_at=e.created_at,
-            )
+    # Check for duplicates
+    user_entries = _shortlists.get(user_id, [])
+    for e in user_entries:
+        if e["player_season_id"] == body.player_season_id:
+            raise HTTPException(status_code=409, detail="Already on shortlist")
 
-    raise HTTPException(status_code=500, detail="Failed to create shortlist entry")
+    # Look up player metadata
+    player = _find_player_by_season_id(body.player_season_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    entry = {
+        "id": _next_id,
+        "player_season_id": body.player_season_id,
+        "player_name": player.get("player_name", ""),
+        "team_name": player.get("team_name", ""),
+        "league": player.get("league", ""),
+        "role_label": player.get("role_label"),
+        "notes": body.notes,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _next_id += 1
+
+    if user_id not in _shortlists:
+        _shortlists[user_id] = []
+    _shortlists[user_id].append(entry)
+
+    return _to_entry(entry)
 
 
 @router.patch("/{shortlist_id}", response_model=ShortlistEntry)
@@ -92,37 +112,26 @@ async def update_shortlist(
     shortlist_id: int,
     body: ShortlistUpdate,
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db),
 ):
     user_id = _get_user_id(credentials)
-    entry = await update_shortlist_notes(db, shortlist_id, user_id, body.notes)
-    if not entry:
-        raise HTTPException(status_code=404, detail="Shortlist entry not found")
+    for e in _shortlists.get(user_id, []):
+        if e["id"] == shortlist_id:
+            e["notes"] = body.notes
+            return _to_entry(e)
 
-    # Reload for response
-    entries = await get_user_shortlist(db, user_id)
-    for e in entries:
-        if e.id == entry.id:
-            ps = e.player_season
-            return ShortlistEntry(
-                id=e.id,
-                player_season_id=e.player_season_id,
-                player_name=ps.player.player_name if ps and ps.player else "",
-                team_name=ps.team.team_name if ps and ps.team else "",
-                league=ps.team.league if ps and ps.team else "",
-                role_label=ps.role_label if ps else None,
-                notes=e.notes,
-                created_at=e.created_at,
-            )
+    raise HTTPException(status_code=404, detail="Shortlist entry not found")
 
 
 @router.delete("/{shortlist_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_shortlist(
     shortlist_id: int,
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db),
 ):
     user_id = _get_user_id(credentials)
-    removed = await remove_from_shortlist(db, shortlist_id, user_id)
-    if not removed:
-        raise HTTPException(status_code=404, detail="Shortlist entry not found")
+    entries = _shortlists.get(user_id, [])
+    for i, e in enumerate(entries):
+        if e["id"] == shortlist_id:
+            entries.pop(i)
+            return
+
+    raise HTTPException(status_code=404, detail="Shortlist entry not found")
